@@ -76,10 +76,6 @@ class WeatherViewController: UIViewController {
     }()
     
     var presenter: WeatherPresenterProtocol!
-    let dateFormatter = DateFormatter()
-    var weatherList = WeatherList(list: [])
-    var filteredWeatherList = [Weather]()
-    var dayWeatherList: [(date: Date, temperature: Double, weatherDet: WeatherDetail)] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -92,8 +88,6 @@ class WeatherViewController: UIViewController {
         view.addSubview(collectionView)
         view.addSubview(tableView)
         
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        
         setupNavigationController()
         
         setConstraints()
@@ -104,7 +98,7 @@ class WeatherViewController: UIViewController {
     
     
     private func setupNavigationController() {
-        navigationItem.title = "Погода"
+        navigationItem.title = "Weather"
         let buttonR = UIBarButtonItem(barButtonSystemItem: .add,
                                       target: self,
                                       action: #selector(cityTable))
@@ -160,16 +154,13 @@ class WeatherViewController: UIViewController {
     private func loadIcn(icon: String, completion: @escaping (UIImage?) -> Void) {
         presenter.loadIcn(icon: icon) { [weak self] imageData in
             guard let imageData = imageData else {
-                // Обработка ошибки загрузки изображения
                 print("Ошибка загрузки изображения")
                 self?.alertError(error: nil)
                 completion(nil)
                 return
             }
                         
-            // Создание объекта UIImage из данных изображения
             if let image = UIImage(data: imageData) {
-                // Обновление UI с использованием изображения
                 DispatchQueue.main.async {
                     completion(image)
                 }
@@ -185,9 +176,7 @@ extension WeatherViewController: WeatherViewProtocol {
     func successNow(city: String, temp: String, weatherList: WeatherList) {
         self.cityLabel.text = city
         self.tempLabel.text = temp
-        self.weatherList = weatherList
-//        print(weatherList)
-//        loadIcn(icon: weatherList.list.first?.weather.first?.icon ?? "")
+        let weatherList = weatherList
         loadIcn(icon: weatherList.list.first?.weather.first?.icon ?? "") { [weak self] image in
             if let image = image {
                 DispatchQueue.main.async {
@@ -202,31 +191,10 @@ extension WeatherViewController: WeatherViewProtocol {
 //        }
         
         DispatchQueue.main.async {
-            // Определяем текущее время
-            let currentDate = Date()
-
-            // Формируем дату, которая наступит через 24 часа от текущего времени
-            let calendar = Calendar.current
-            if let nextDay = calendar.date(byAdding: .hour, value: 24, to: currentDate) {
-                // Отфильтруем массив данных о погоде, оставив только данные за следующие 24 часа
-                self.filteredWeatherList = weatherList.list.filter { self.dateFormatter.date(from: $0.dt_txt) ?? Date() < nextDay }
-                self.collectionView.reloadData()
-            }
+            self.collectionView.reloadData()
+            self.tableView.reloadData()
 
         }
-        
-        
-                
-        // Проходимся по всем элементам в списке погоды и формируем список дневных данных о погоде
-        for weather in weatherList.list {
-            // Проверяем, является ли время в 15:00
-            if let weatherDate = dateFormatter.date(from: weather.dt_txt),
-               Calendar.current.component(.hour, from: weatherDate) == 15 {
-                // Если это время в 15:00, добавляем данные в наш список дневной погоды
-                dayWeatherList.append((date: weatherDate, temperature: weather.main.temp, weatherDet: weather.weather.first!))
-            }
-        }
-        tableView.reloadData()
     }
     
     func failure(error: (any Error)?) {
@@ -241,31 +209,16 @@ extension WeatherViewController: UICollectionViewDataSource, UICollectionViewDel
         // MARK: - UICollectionViewDataSource
         
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-            return filteredWeatherList.count
+            return presenter.getFilteredWeatherList().count
         }
         
         func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "WeatherCell", for: indexPath) as! WeatherCell
             
-//            let weather = weatherData[indexPath.item]
-//            cell.textLabel.text = "\(weather.temperature)°"
-//            cell.imageView.image = weather.icon
-//            
+            let weather = presenter.getFilteredWeatherList()[indexPath.item]
             
-            let weather = filteredWeatherList[indexPath.item]
+            cell.timeLabel.text = presenter.formatForCollectionView(dat: weather.dt_txt)
             
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-
-            if let date = dateFormatter.date(from: weather.dt_txt) {
-                // Устанавливаем формат даты и времени
-                dateFormatter.dateFormat = "dd.MM \n HH:mm"
-                let formattedDate = dateFormatter.string(from: date)
-                cell.timeLabel.text = formattedDate
-            } else {
-                cell.timeLabel.text = weather.dt_txt // В случае ошибки парсинга оставляем оригинальный текст
-            }
-
             loadIcn(icon: weather.weather[0].icon) { image in
                 if let image = image {
                     DispatchQueue.main.async {
@@ -282,7 +235,6 @@ extension WeatherViewController: UICollectionViewDataSource, UICollectionViewDel
         // MARK: - UICollectionViewDelegateFlowLayout
         
         func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-            // Установите размеры ячейки в вашем collectionView
             return CGSize(width: 90, height: 150)
         }
 }
@@ -290,7 +242,7 @@ extension WeatherViewController: UICollectionViewDataSource, UICollectionViewDel
 
 extension WeatherViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return dayWeatherList.count
+        return presenter.getDayWeatherList().count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -298,10 +250,8 @@ extension WeatherViewController: UITableViewDataSource, UITableViewDelegate {
         cell.backgroundColor = view.backgroundColor
         
         
-        // Получаем данные о погоде для текущего дня
-        let dayWeather = dayWeatherList[indexPath.row]
+        let dayWeather = presenter.getDayWeatherList()[indexPath.row]
         
-        // Настраиваем ячейку с данными о погоде
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "dd.MM"
         
@@ -313,8 +263,8 @@ extension WeatherViewController: UITableViewDataSource, UITableViewDelegate {
             if let image = image {
                 DispatchQueue.main.async {
                     let imageView = UIImageView(image: image)
-                    imageView.contentMode = .scaleAspectFit // Устанавливаем режим масштабирования изображения
-                    imageView.frame = CGRect(x: 0, y: 0, width: 50, height: 50) // Устанавливаем размеры изображения
+                    imageView.contentMode = .scaleAspectFit
+                    imageView.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
                     cell.accessoryView = imageView
                 }
             }

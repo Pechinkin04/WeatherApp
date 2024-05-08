@@ -10,47 +10,42 @@ import UIKit
 class CitiesTableViewController: UITableViewController {
     
     var presenter: CitiesPresenterProtocol!
-    var cities: [String] = [] // Здесь будут храниться города
-    var addCityTextField: UITextField! // Поле для ввода нового города
+    lazy var addCityTextField: UITextField = {
+        let textField = UITextField(frame: CGRect(x: 15, y: 0, width: view.frame.width - 30, height: 44))
+        textField.placeholder = "Enter city"
+        textField.borderStyle = .roundedRect
+        textField.addTarget(self, action: #selector(addButtonTapped), for: .editingDidEndOnExit)
+        
+        return textField
+    }()
+    
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         navigationItem.rightBarButtonItem = editButtonItem
-        
         view.backgroundColor = .black
-        tableView.separatorStyle = .none
+        
         tableView.delegate = self
-        
-        // Пример добавления городов в список
-        cities = UserDefaults.standard.array(forKey: "SavedCities") as? [String] ?? [ "New York", "London", "Paris" ]
-        
-        // Настройка таблицы
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
         
-        // Создаем текстовое поле программно
-        addCityTextField = UITextField(frame: CGRect(x: 15, y: 0, width: view.frame.width - 30, height: 44))
-        addCityTextField.placeholder = "Введите город"
-        addCityTextField.borderStyle = .roundedRect
-        addCityTextField.addTarget(self, action: #selector(addButtonTapped), for: .editingDidEndOnExit)
-        
-        // Добавляем текстовое поле в верхнюю часть таблицы
         tableView.tableHeaderView = addCityTextField
     }
     
     @objc func addButtonTapped() {
         guard var cityName = addCityTextField.text, !cityName.isEmpty else {
-            return // Ничего не делаем, если поле пустое
+            return 
         }
         
         cityName = cityName.lowercased().capitalized
         
-        guard !cities.contains(cityName) else { alertError(mes: "City in list")
+        guard !presenter.getCities().contains(cityName) else { alertError(mes: "City in list")
         return }
         
         presenter.checkCity(city: cityName)
         
         addCityTextField.text = "" // Очищаем поле для ввода
+        tableView.reloadData()
     }
     
     private func alertError(mes: String?) {
@@ -67,7 +62,7 @@ class CitiesTableViewController: UITableViewController {
     // MARK: - Table view data source
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return cities.count
+        return presenter.getCities().count
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -75,11 +70,8 @@ class CitiesTableViewController: UITableViewController {
         
         cell.backgroundColor = UIColor(red: 0.8, green: 0.8, blue: 1, alpha: 0.5)
         cell.textLabel?.textColor = .white // Цвет текста
-        cell.layer.cornerRadius = 15
-        cell.layoutMargins = UIEdgeInsets(top: 20, left: 10, bottom: 20, right: 10)
         
-        // Настройка ячейки
-        let city = cities[indexPath.row]
+        let city = presenter.getCities()[indexPath.row]
         cell.textLabel?.text = city
         cell.textLabel?.font = .systemFont(ofSize: 32)
         
@@ -93,9 +85,10 @@ class CitiesTableViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
             // Удаляем город из массива и из UserDefaults
+            var cities = presenter.getCities()
             cities.remove(at: indexPath.row)
-            UserDefaults.standard.set(cities, forKey: "SavedCities")
-            
+            presenter.setCities(cities: cities)
+
             // Удаляем соответствующую строку из таблицы
             tableView.deleteRows(at: [indexPath], with: .automatic)
             tableView.reloadData()
@@ -110,20 +103,12 @@ class CitiesTableViewController: UITableViewController {
         // Разрешаем удаление ячеек только для индексов больше 0
         return indexPath.row != 0
     }
-
-
     
     // MARK: - Table view delegate
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let movedCity = cities.remove(at: indexPath.row)
-        cities.insert(movedCity, at: 0)
-        tableView.reloadData()
-        UserDefaults.standard.set(self.cities, forKey: "SavedCities")
-        presenter.pickCity(city: cities[0])
+        presenter.pickCity(indexP: indexPath.row)
     }
 
-
-    
 }
 
 
@@ -131,8 +116,8 @@ class CitiesTableViewController: UITableViewController {
 extension CitiesTableViewController: CitiesTableViewProtocol {
     func success(city: String) {
         DispatchQueue.main.async {
-            self.cities.append(city)
-            UserDefaults.standard.set(self.cities, forKey: "SavedCities")
+//            self.cities.append(city)
+//            UserDefaults.standard.set(self.cities, forKey: "SavedCities")
             self.tableView.reloadData() // Обновляем таблицу
             
         }
