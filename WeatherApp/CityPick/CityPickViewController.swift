@@ -30,6 +30,13 @@ class CityPickViewController: UIViewController {
         super.viewDidLoad()
         
         setupUI()
+        
+        textField.delegate = self
+        
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        
+        // Добавляем жест распознавания к представлению
+        view.addGestureRecognizer(tapGesture)
     }
     
     private func setupUI() {
@@ -50,6 +57,11 @@ class CityPickViewController: UIViewController {
         
         button.addTarget(self, action: #selector(buttonTapped), for: .touchUpInside)
         
+    }
+    
+    @objc func dismissKeyboard() {
+        // Скрываем клавиатуру
+        view.endEditing(true)
     }
 
     @objc private func buttonTapped() {
@@ -81,4 +93,12 @@ extension CityPickViewController: CityPickViewProtocol {
     }
     
     
+}
+
+extension CityPickViewController: UITextFieldDelegate {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        // Скрываем клавиатуру
+        textField.resignFirstResponder()
+        return true
+    }
 }
